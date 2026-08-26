@@ -887,6 +887,21 @@ async function checkLive(){
   return false;
 }
 
+/* The fourth failure, and the only one /live/status cannot see. The server reports the path live
+   because from its side it is: mediamtx is up and the pipeline is publishing. What it cannot know
+   is whether THIS browser can reach the ports that carry the video, which live on 8889, 8189/udp
+   and 8888 while the dashboard itself arrived over 8080. On a cloud instance that is the usual
+   case — one port opened, the rest still shut — and leaving the placeholder on "connecting…"
+   describes a handshake that already failed. */
+function unreachable(host){
+  const el = $("#live-reason");
+  if (!el) return;
+  el.textContent = "No picture — the stream is publishing, but this browser cannot reach it";
+  const act = $("#live-action");
+  if (act) act.textContent =
+    `Open ${host}:${WHEP_PORT}/tcp and ${host}:8189/udp for WebRTC, or ${host}:${HLS_PORT}/tcp for HLS`;
+}
+
 async function connectWhep(){
   const host = location.hostname;
   $("#live-mode").textContent = "· connecting…";
@@ -909,7 +924,7 @@ async function connectWhep(){
     const v = $("#live-video");
     v.src = `http://${host}:${HLS_PORT}/${PATHNAME}/index.m3u8`;
     v.play().then(() => $("#live-ph").style.display = "none")
-            .catch(() => { $("#live-mode").textContent = "· unavailable"; $("#live-ph").style.display = "grid"; });
+            .catch(() => { $("#live-mode").textContent = "· unavailable"; $("#live-ph").style.display = "grid"; unreachable(host); });
   }
 }
 

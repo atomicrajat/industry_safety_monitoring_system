@@ -660,7 +660,7 @@ async def events_stream(ws: WebSocket):
 # rtsp output toggle
 # ---------------------------------------------------------------------------------------------
 @app.post("/rtsp/{state}", tags=["live"])
-def rtsp(state: str):
+def rtsp(state: str, request: Request):
     """Turn the tiled RTSP output on or off.
 
     Off by default because the encode branch is a real cost. It runs on dedicated NVENC silicon
@@ -673,13 +673,13 @@ def rtsp(state: str):
                        cwd=ROOT, capture_output=True, text=True, timeout=60)
     return {"rtsp": state, "ok": r.returncode == 0,
             "output": (r.stdout + r.stderr).strip()[-400:],
-            "url": f"rtsp://{os.uname().nodename}:8554"
+            "url": f"rtsp://{request.url.hostname or os.uname().nodename}:8554"
                    f"{DEMO['sinks']['rtsp_out']['mount']}" if state == "on" else None,
             "note": "pipeline must be started with --rtsp-out to publish"}
 
 
 @app.get("/live/status", tags=["live"])
-def live_status():
+def live_status(request: Request):
     """Why the live view is or is not showing a picture.
 
     Three different failures all look identical in the browser — a black box:
@@ -723,7 +723,14 @@ def live_status():
     else:
         reason, action = None, None
 
-    host = os.uname().nodename
+    # The host the CALLER used, not this machine's own name. `os.uname().nodename` is whatever the
+    # platform decided: on AWS it is the internal `ip-172-31-x-y`, which resolves nowhere outside
+    # the VPC, and on any cloud instance it is a name the viewer's DNS has never heard of. The
+    # request already carries the address that demonstrably reaches this API, so every URL below
+    # is built from that and follows the viewer whether they came by public IP, private IP,
+    # tunnel or proxy. scripts/demo_up.sh prints addresses instead of `hostname` for the same
+    # reason — a hostname only works if the viewer's DNS agrees.
+    host = request.url.hostname or os.uname().nodename
     return {
         "ready": publishing, "server": server, "publishing": publishing,
         "pipeline_running": bool(pipe), "pipeline_rtsp_out": pipe_rtsp,
